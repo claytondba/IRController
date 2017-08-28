@@ -17,7 +17,7 @@
 #define BROKER_PORT  16585
 #define ID_DISPO "esp-sala-01"
 #define BROKER_USER "esp-sala-01"
-#define BROKER_PASS "gdsfederal"
+#define BROKER_PASS "gdsf-ede--ral"
 #define SUB_TOPIC "home/sala/ircontroll/#"
 
 
