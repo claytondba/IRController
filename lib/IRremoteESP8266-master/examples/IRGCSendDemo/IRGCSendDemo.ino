@@ -22,5 +22,6 @@ void setup()
 void loop() {
   Serial.println("Toggling power");
   irsend.sendGC(Samsung_power_toggle, 71);
+
   delay(10000);
 }

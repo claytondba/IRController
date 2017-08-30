@@ -6,8 +6,8 @@
 //#include <IRsend.h>
 //#include <IRutils.h>
 
-#define SSID "MIC24"
-#define PASSWORD  "-------"
+#define SSID "Clay Airport"
+#define PASSWORD  "naoseiasenha"
 //Configurcao do IR
 #define RECV_PIN 12
 #define SEND_PIN 14
@@ -17,7 +17,7 @@
 #define BROKER_PORT  16585
 #define ID_DISPO "esp-sala-01"
 #define BROKER_USER "esp-sala-01"
-#define BROKER_PASS "gdsf-ede--ral"
+#define BROKER_PASS "gdsfederal"
 #define SUB_TOPIC "home/sala/ircontroll/#"
 
 
@@ -29,6 +29,22 @@ PubSubClient MQTT(espClient);
 decode_results results;
 IRrecv irrecv(RECV_PIN); //VARIÁVEL DO TIPO IRrecv
 IRsend irsend(SEND_PIN);
+
+bool state_tv_sala = 0;
+
+void SendCode()
+{
+  //desliga
+  int frequencia = 32; //FREQUÊNCIA DO SINAL IR(32KHz)
+  unsigned int  rawData[67] = {8950,4400, 700,450, 700,450, 700,1550, 650,550, 700,450, 750,400, 700,500,
+     700,450, 700,1600, 700,1550, 700,500, 700,1550, 650,1650, 700,1550, 700,1550, 700,1600, 700,500, 700,
+     450, 700,500, 700,1550, 750,450, 700,500, 700,450, 700,450, 700,1550, 700,1550, 650,1650, 650,500, 700,
+     1550, 700,1550, 700,1550, 700,1600, 750};  // NEC 20DF10EF
+  irsend.sendRaw(rawData,67,frequencia); // PARÂMETROS NECESSÁRIOS PARA ENVIO DO SINAL IR
+  Serial.println("Comando enviado: Liga / Desliga");
+  //unsigned int  data = 0x20DF10EF;
+
+}
 
 void  ircode (decode_results *results)
 {
@@ -74,7 +90,6 @@ void  dumpInfo (decode_results *results)
 {
   // Show Encoding standard
   Serial.print("Encoding  : ");
-  encoding(results);
   Serial.println("");
 
   // Show Code & length
@@ -218,6 +233,20 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length)
     message += c;
   }
 
+  if(String(topic) =="home/sala/ircontroll/tvsala/cmd" && String(message) == "ON")
+  {
+    Serial.println("Ligar TV LG");
+    irsend.sendNEC(0x20DF10EF, 32);
+    MQTT.publish("home/sala/ircontroll/tvsala/stat", "ON");
+
+  }
+  else if(String(topic) =="home/sala/ircontroll/tvsala/cmd" && String(message) == "OFF")
+  {
+    Serial.println("Ligar TV LG");
+    irsend.sendNEC(0x20DF10EF, 32);
+    MQTT.publish("home/sala/ircontroll/tvsala/stat", "OFF");
+  }
+
   Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));
   Serial.flush();
 
@@ -292,6 +321,8 @@ void setup()
   initWiFi();
   initMQTT();
 
+  irsend.begin();
+
   MQTT.subscribe(SUB_TOPIC);
   Serial.println("Inscrito no tepico: ");
   Serial.println(SUB_TOPIC);
@@ -300,6 +331,8 @@ void setup()
 // the loop function runs over and over again forever
 void loop()
 {
+  //SendCode();
+
   if(COPIA)
   {
     Serial.println("Modo IRCopy");
