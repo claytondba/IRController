@@ -2,32 +2,33 @@
 #include <Arduino.h>
 #include <PubSubClient.h>
 #include <IRremoteESP8266.h>
-//#include <IRrecv.h>
-//#include <IRsend.h>
-//#include <IRutils.h>
+#include <ESP8266mDNS.h>
+#include <ArduinoOTA.h>
 
+//Configurcao Wi-Fi
 #define SSID "Clay Airport"
 #define PASSWORD  "naoseiasenha"
+
 //Configurcao do IR
 #define RECV_PIN 12
 #define SEND_PIN 14
 
-
+//Configurcao MQTT
 #define BROKER_MQTT "m13.cloudmqtt.com"
 #define BROKER_PORT  16585
 #define ID_DISPO "esp-sala-01"
 #define BROKER_USER "esp-sala-01"
-#define BROKER_PASS "gdsfederal"
+#define BROKER_PASS "gdfedera"
 #define SUB_TOPIC "home/sala/ircontroll/#"
 
-
+//Modo cópia = 1 ativa clone de controles para Serial
 #define COPIA 0
 
 
 WiFiClient espClient;
 PubSubClient MQTT(espClient);
 decode_results results;
-IRrecv irrecv(RECV_PIN); //VARIÁVEL DO TIPO IRrecv
+IRrecv irrecv(RECV_PIN);
 IRsend irsend(SEND_PIN);
 
 bool state_tv_sala = 0;
@@ -235,16 +236,25 @@ void mqtt_callback(char* topic, byte* payload, unsigned int length)
 
   if(String(topic) =="home/sala/ircontroll/tvsala/cmd" && String(message) == "ON")
   {
-    Serial.println("Ligar TV LG");
-    irsend.sendNEC(0x20DF10EF, 32);
-    MQTT.publish("home/sala/ircontroll/tvsala/stat", "ON");
+    if(!state_tv_sala)
+    {
+      Serial.println("Ligar TV LG");
+      irsend.sendNEC(0x20DF10EF, 32);
+      MQTT.publish("home/sala/ircontroll/tvsala/stat", "ON");
+      state_tv_sala = !state_tv_sala;
+    }
 
   }
   else if(String(topic) =="home/sala/ircontroll/tvsala/cmd" && String(message) == "OFF")
   {
-    Serial.println("Ligar TV LG");
-    irsend.sendNEC(0x20DF10EF, 32);
-    MQTT.publish("home/sala/ircontroll/tvsala/stat", "OFF");
+    if(state_tv_sala)
+    {
+      Serial.println("Desligar TV LG");
+      irsend.sendNEC(0x20DF10EF, 32);
+      MQTT.publish("home/sala/ircontroll/tvsala/stat", "OFF");
+
+      state_tv_sala = !state_tv_sala;
+    }
   }
 
   Serial.println("Tópico => " + String(topic) + " | Valor => " + String(message));
@@ -319,18 +329,49 @@ void setup()
   Serial.begin(9600);
   Serial.println("Iniciado com sucesso");
   initWiFi();
+
+  // Porta padrao do ESP8266 para OTA eh 8266 - Voce pode mudar ser quiser, mas deixe indicado!
+  // ArduinoOTA.setPort(8266);
+
+ // O Hostname padrao eh esp8266-[ChipID], mas voce pode mudar com essa funcao
+ // ArduinoOTA.setHostname("nome_do_meu_esp8266");
+
+ // Nenhuma senha eh pedida, mas voce pode dar mais seguranca pedindo uma senha pra gravar
+ // ArduinoOTA.setPassword((const char *)"123");
+
+  ArduinoOTA.onStart([]() {
+    Serial.println("Inicio...");
+  });
+  ArduinoOTA.onEnd([]() {
+    Serial.println("nFim!");
+  });
+  ArduinoOTA.onProgress([](unsigned int progress, unsigned int total) {
+    Serial.printf("Progresso: %u%%r", (progress / (total / 100)));
+  });
+  ArduinoOTA.onError([](ota_error_t error) {
+    Serial.printf("Erro [%u]: ", error);
+    if (error == OTA_AUTH_ERROR) Serial.println("Autenticacao Falhou");
+    else if (error == OTA_BEGIN_ERROR) Serial.println("Falha no Inicio");
+    else if (error == OTA_CONNECT_ERROR) Serial.println("Falha na Conexao");
+    else if (error == OTA_RECEIVE_ERROR) Serial.println("Falha na Recepcao");
+    else if (error == OTA_END_ERROR) Serial.println("Falha no Fim");
+  });
+  ArduinoOTA.begin();
+
   initMQTT();
 
   irsend.begin();
 
   MQTT.subscribe(SUB_TOPIC);
-  Serial.println("Inscrito no tepico: ");
+  Serial.println("Inscrito no topico: ");
   Serial.println(SUB_TOPIC);
 }
 
-// the loop function runs over and over again forever
 void loop()
 {
+
+  // Mantenha esse trecho no inicio do laço "loop" - verifica requisicoes OTA
+  ArduinoOTA.handle();
   //SendCode();
 
   if(COPIA)
@@ -348,18 +389,13 @@ void loop()
       dumpRaw(&results);            // Output the results in RAW format
       dumpCode(&results);           // Output the results as source code
       Serial.println("");           // Blank line between entries
-      irrecv.resume();   // Receive the next value
+      irrecv.resume();
     }
-
-    /* code */
   }
-
-
   if (!MQTT.connected())
   {
     reconnectMQTT();
   }
-
   recconectWiFi();
   MQTT.loop();
 
